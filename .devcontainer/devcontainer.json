@@ -1,0 +1,16 @@
+{
+  "name": "Flutter Dev",
+  "image": "ghcr.io/cirruslabs/flutter:stable",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "postCreateCommand": "flutter --version && flutter pub get",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter"
+      ]
+    }
+  }
+}
