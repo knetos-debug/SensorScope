@@ -1,0 +1,25 @@
+# Flutter/Dart/Pub related
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/Flutter.framework
+*.iml
+*.ipr
+*.iws
+.idea/
+.macos/
+android/.gradle/
+android/captures/
+android/app/debug
+android/app/profile
+android/app/release
+
+test_output/
+coverage/
+.DS_Store
