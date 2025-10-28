@@ -1,0 +1,15 @@
+include ':app'
+
+def flutterProjectRoot = rootDir.parentFile.toPath()
+
+def plugins = new Properties()
+def pluginsFile = flutterProjectRoot.resolve(".flutter-plugins").toFile()
+if (pluginsFile.exists()) {
+    pluginsFile.withReader('UTF-8') { reader -> plugins.load(reader) }
+}
+
+plugins.each { name, path ->
+    def pluginDirectory = flutterProjectRoot.resolve(path).toFile()
+    include ":$name"
+    project(":$name").projectDir = pluginDirectory
+}
