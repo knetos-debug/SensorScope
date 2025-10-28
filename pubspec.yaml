@@ -17,7 +17,7 @@ dependencies:
   fl_chart: ^0.66.0
   sensors_plus: ^4.0.2
   flutter_compass: ^0.7.0
-  barometer: ^0.0.4
+  barometer: ^0.0.2
   light_sensor: ^2.0.0
   battery_plus: ^4.0.2
   geolocator: ^10.1.0
