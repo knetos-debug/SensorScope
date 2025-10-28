@@ -2,8 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../data/sensor_controller.dart';
 import '../../../widgets/sparkline_chart.dart';
+import '../data/sensor_controller.dart';
 
 class SensorCard extends StatelessWidget {
   const SensorCard({
