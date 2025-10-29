@@ -1,104 +1,180 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'consent_dialog.dart';
 import 'models/incident.dart';
 import 'security_controller.dart';
+import 'security_settings_controller.dart';
 
-class SecurityHomePage extends ConsumerWidget {
+class SecurityHomePage extends ConsumerStatefulWidget {
   const SecurityHomePage({super.key});
 
   static const routeName = 'security';
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(securityControllerProvider);
-    final controller = ref.read(securityControllerProvider.notifier);
-    final incidents = state.visibleIncidents;
+  ConsumerState<SecurityHomePage> createState() => _SecurityHomePageState();
+}
+
+class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
+  bool _dialogInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.listen<AsyncValue<SecuritySettings>>(securitySettingsProvider,
+        (previous, next) {
+      next.whenData((settings) {
+        if (!settings.consentRecorded && !_dialogInFlight) {
+          _promptForConsent();
+        }
+      });
+    });
+  }
+
+  Future<void> _promptForConsent() async {
+    if (!mounted) {
+      return;
+    }
+    _dialogInFlight = true;
+    final result = await showSecurityConsentDialog(context);
+    final controller = ref.read(securitySettingsProvider.notifier);
+    if (result == true) {
+      await controller.setConsent(true);
+      await controller.setEnabled(true);
+    } else {
+      await controller.setConsent(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Säkerhetskontroller kräver samtycke för att aktiveras.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+    _dialogInFlight = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final securityState = ref.watch(securityControllerProvider);
+    final securityController = ref.read(securityControllerProvider.notifier);
+    final settingsAsync = ref.watch(securitySettingsProvider);
 
     return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Säkerhetskontroller',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 12),
-                _SeverityFilterBar(
-                  selected: state.filter,
-                  onSelected: controller.setFilter,
-                ),
-                const SizedBox(height: 12),
-                Row(
+      child: settingsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Kunde inte läsa in säkerhetsinställningar.\n$error',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        data: (settings) {
+          final incidents = securityState.visibleIncidents;
+          final canRun = settings.canRunChecks && !securityState.isRunning;
+          final exportEnabled = incidents.isNotEmpty;
+          final emptyMessage = securityState.isRunning
+              ? 'Kör kontroller...'
+              : !_dialogInFlight && !settings.consentGranted
+                  ? 'Säkerhetskontroller kräver samtycke. Aktivera i inställningarna.'
+                  : !settings.enabled
+                      ? 'Aktivera säkerhetskontroller i inställningarna.'
+                      : !settings.hasActiveChecks
+                          ? 'Aktivera minst en kontroll i inställningarna.'
+                          : 'Inga incidenter. Kör kontroller via knappen nedan.';
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: state.isRunning
-                            ? null
-                            : () async {
-                                await controller.runChecks();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Kontroller kommer att läggas till i kommande steg.',
-                                      ),
-                                      duration: Duration(seconds: 2),
-                                    ),
-                                  );
-                                }
-                              },
-                        child: state.isRunning
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Kör kontroller'),
-                      ),
+                    Text(
+                      'Säkerhetskontroller',
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: incidents.isEmpty
-                            ? null
-                            : () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Exportfunktionen läggs till i ett senare steg.',
-                                    ),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                              },
-                        child: const Text('Exportera logg'),
-                      ),
+                    const SizedBox(height: 12),
+                    _SeverityFilterBar(
+                      selected: securityState.filter,
+                      onSelected: securityController.setFilter,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: canRun
+                                ? () async {
+                                    await securityController.runChecks();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Kontroller kommer att läggas till i kommande steg.',
+                                          ),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                : null,
+                            child: securityState.isRunning
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : const Text('Kör kontroller'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: exportEnabled
+                                ? () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Exportfunktionen läggs till i ett senare steg.',
+                                        ),
+                                        duration: Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                : null,
+                            child: const Text('Exportera logg'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: incidents.isEmpty
-                ? _EmptyState(isRunning: state.isRunning)
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                    itemCount: incidents.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final incident = incidents[index];
-                      return _IncidentCard(incident: incident);
-                    },
-                  ),
-          ),
-        ],
+              ),
+              Expanded(
+                child: incidents.isEmpty
+                    ? _EmptyState(message: emptyMessage)
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                        itemCount: incidents.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final incident = incidents[index];
+                          return _IncidentCard(incident: incident);
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -121,7 +197,7 @@ class _SeverityFilterBar extends StatelessWidget {
       (value: IncidentSeverity.warning, label: IncidentSeverity.warning.label),
       (
         value: IncidentSeverity.critical,
-        label: IncidentSeverity.critical.label
+        label: IncidentSeverity.critical.label,
       ),
     ];
     return Wrap(
@@ -223,9 +299,9 @@ class _IncidentCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.isRunning});
+  const _EmptyState({required this.message});
 
-  final bool isRunning;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -237,9 +313,7 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              isRunning
-                  ? 'Kör kontroller...'
-                  : 'Inga incidenter. Kör kontroller via knappen nedan.',
+              message,
               style: textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),
