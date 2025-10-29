@@ -2,7 +2,9 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'dns_check.dart';
 import 'models/incident.dart';
+import 'security_settings_controller.dart';
 
 final _random = Random();
 
@@ -72,13 +74,39 @@ class SecurityController extends StateNotifier<SecurityState> {
     state = state.copyWith(filter: severity, filterSpecified: true);
   }
 
-  Future<void> runChecks() async {
+  Future<void> runChecks(SecuritySettings settings) async {
     if (state.isRunning) {
       return;
     }
     state = state.copyWith(isRunning: true);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    state = state.copyWith(isRunning: false);
+    try {
+      final drafts = <IncidentDraft>[];
+
+      if (settings.dnsDiffEnabled) {
+        final dnsService = DnsCheckService();
+        drafts.addAll(await dnsService.run());
+      }
+
+      if (drafts.isEmpty) {
+        addIncident(
+          type: 'SECURITY_OK',
+          severity: IncidentSeverity.info,
+          message: 'Säkerhetskontroller slutfördes utan avvikelse.',
+        );
+      } else {
+        for (final draft in drafts) {
+          addIncident(
+            type: draft.type,
+            severity: draft.severity,
+            message: draft.message,
+            details: draft.details,
+            recommendation: draft.recommendation,
+          );
+        }
+      }
+    } finally {
+      state = state.copyWith(isRunning: false);
+    }
   }
 }
 

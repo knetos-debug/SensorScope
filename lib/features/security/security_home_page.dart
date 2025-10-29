@@ -112,13 +112,14 @@ class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
                           child: FilledButton(
                             onPressed: canRun
                                 ? () async {
-                                    await securityController.runChecks();
+                                    await securityController
+                                        .runChecks(settings);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
                                         const SnackBar(
                                           content: Text(
-                                            'Kontroller kommer att läggas till i kommande steg.',
+                                            'Säkerhetskontroller har körts.',
                                           ),
                                           duration: Duration(seconds: 2),
                                         ),
