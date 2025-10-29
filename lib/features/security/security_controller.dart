@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'captive_portal.dart';
 import 'dns_check.dart';
 import 'models/incident.dart';
 import 'security_settings_controller.dart';
@@ -85,6 +86,14 @@ class SecurityController extends StateNotifier<SecurityState> {
       if (settings.dnsDiffEnabled) {
         final dnsService = DnsCheckService();
         drafts.addAll(await dnsService.run());
+      }
+
+      if (settings.captivePortalEnabled) {
+        final captiveService = CaptivePortalCheckService();
+        final incident = await captiveService.run();
+        if (incident != null) {
+          drafts.add(incident);
+        }
       }
 
       if (drafts.isEmpty) {
