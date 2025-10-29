@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'captive_portal.dart';
 import 'dns_check.dart';
+import 'gateway_watch.dart';
 import 'models/incident.dart';
 import 'security_settings_controller.dart';
 
@@ -45,6 +47,10 @@ class SecurityState {
 
 class SecurityController extends StateNotifier<SecurityState> {
   SecurityController() : super(const SecurityState());
+
+  Timer? _gatewayTimer;
+  GatewayStatus? _gatewayBaseline;
+  bool _gatewayActive = false;
 
   void addIncident({
     required String type,
@@ -96,6 +102,15 @@ class SecurityController extends StateNotifier<SecurityState> {
         }
       }
 
+      if (settings.gatewayWatchEnabled) {
+        final monitorIncident = await _ensureGatewayMonitor();
+        if (monitorIncident != null) {
+          drafts.add(monitorIncident);
+        }
+      } else {
+        _stopGatewayMonitor();
+      }
+
       if (drafts.isEmpty) {
         addIncident(
           type: 'SECURITY_OK',
@@ -116,6 +131,93 @@ class SecurityController extends StateNotifier<SecurityState> {
     } finally {
       state = state.copyWith(isRunning: false);
     }
+  }
+
+  Future<IncidentDraft?> _ensureGatewayMonitor() async {
+    if (_gatewayActive && _gatewayBaseline != null) {
+      return null;
+    }
+    final service = GatewayWatchService();
+    final status = await service.readStatus();
+    if (status == null) {
+      _stopGatewayMonitor();
+      return IncidentDraft(
+        type: 'GATEWAY_INFO_UNAVAILABLE',
+        severity: IncidentSeverity.info,
+        message:
+            'Gateway-information kan inte läsas på denna enhet. Gateway-övervakning avaktiverad.',
+      );
+    }
+    _gatewayBaseline = status;
+    _gatewayActive = true;
+    _gatewayTimer ??= Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _pollGateway(),
+    );
+    return IncidentDraft(
+      type: 'GATEWAY_BASELINE',
+      severity: IncidentSeverity.info,
+      message:
+          'Gateway-övervakning startad. Baslinje: ${status.mac} @ ${status.ip}.',
+      details: {
+        'gateway_ip': status.ip,
+        'gateway_mac': status.mac,
+        'interface': status.interface,
+      },
+    );
+  }
+
+  Future<void> _pollGateway() async {
+    if (!_gatewayActive) {
+      return;
+    }
+    final baseline = _gatewayBaseline;
+    if (baseline == null) {
+      return;
+    }
+    final service = GatewayWatchService();
+    final current = await service.readStatus();
+    if (current == null) {
+      addIncident(
+        type: 'GATEWAY_INFO_UNAVAILABLE',
+        severity: IncidentSeverity.warning,
+        message: 'Gateway-information kunde inte läsas vid övervakning.',
+        details: {'gateway_ip': baseline.ip},
+      );
+      _stopGatewayMonitor();
+      return;
+    }
+    if (current.mac.toLowerCase() != baseline.mac.toLowerCase() ||
+        current.ip != baseline.ip) {
+      addIncident(
+        type: 'GATEWAY_MAC_CHANGED',
+        severity: IncidentSeverity.critical,
+        message:
+            'Gateway MAC ändrad (${baseline.mac} → ${current.mac} @ ${current.ip}).',
+        details: {
+          'old_mac': baseline.mac,
+          'new_mac': current.mac,
+          'gateway_ip': current.ip,
+          'interface': current.interface,
+        },
+        recommendation:
+            'Koppla från Wi-Fi och anslut igen. Om det fortsätter kan det vara ARP-spoofing.',
+      );
+      _gatewayBaseline = current;
+    }
+  }
+
+  void _stopGatewayMonitor() {
+    _gatewayActive = false;
+    _gatewayTimer?.cancel();
+    _gatewayTimer = null;
+    _gatewayBaseline = null;
+  }
+
+  @override
+  void dispose() {
+    _stopGatewayMonitor();
+    super.dispose();
   }
 }
 
