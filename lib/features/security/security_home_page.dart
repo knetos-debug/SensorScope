@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'consent_dialog.dart';
+import 'export_bundle.dart';
 import 'models/incident.dart';
 import 'security_controller.dart';
 import 'security_settings_controller.dart';
@@ -17,6 +18,7 @@ class SecurityHomePage extends ConsumerStatefulWidget {
 
 class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
   bool _dialogInFlight = false;
+  bool _exportInProgress = false;
 
   @override
   void initState() {
@@ -78,7 +80,7 @@ class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
         data: (settings) {
           final incidents = securityState.visibleIncidents;
           final canRun = settings.canRunChecks && !securityState.isRunning;
-          final exportEnabled = incidents.isNotEmpty;
+          final exportEnabled = incidents.isNotEmpty && !_exportInProgress;
           final emptyMessage = securityState.isRunning
               ? 'Kör kontroller...'
               : !_dialogInFlight && !settings.consentGranted
@@ -141,18 +143,57 @@ class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: exportEnabled
-                                ? () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Exportfunktionen läggs till i ett senare steg.',
-                                        ),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
+                                ? () async {
+                                    setState(() {
+                                      _exportInProgress = true;
+                                    });
+                                    try {
+                                      final exporter = IncidentExportService();
+                                      final path =
+                                          await exporter.export(incidents);
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Logg exporterad: $path',
+                                            ),
+                                            duration:
+                                                const Duration(seconds: 4),
+                                          ),
+                                        );
+                                      }
+                                    } catch (error) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Export misslyckades: $error',
+                                            ),
+                                            duration:
+                                                const Duration(seconds: 4),
+                                          ),
+                                        );
+                                      }
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() {
+                                          _exportInProgress = false;
+                                        });
+                                      }
+                                    }
                                   }
                                 : null,
-                            child: const Text('Exportera logg'),
+                            child: _exportInProgress
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Exportera logg'),
                           ),
                         ),
                       ],
