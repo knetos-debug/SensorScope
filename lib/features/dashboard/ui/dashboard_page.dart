@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../dashboard/data/sensor_controller.dart';
 import '../../../core/logger.dart';
 import '../../../widgets/live_indicator.dart';
 import '../../../widgets/record_button.dart';
+import '../../dashboard/data/sensor_controller.dart';
 import 'sensor_card.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
