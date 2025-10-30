@@ -38,7 +38,19 @@ State management uses **Riverpod**, routing relies on **go_router**, and charts 
 ## Getting Started
 
 ### Prerequisites
-- Flutter 3.16 or newer (`flutter doctor` should report a clean Android toolchain).
+- Flutter 3.16 or newer (`flutter doctor` should report a clean Android toolchain). If you're using this development container and
+  the SDK is missing, run the helper below to download and install it locally.
+
+#### Install Flutter inside the container
+
+```bash
+./scripts/install_flutter.sh
+export PATH="$PWD/.flutter-sdk/bin:$PATH"
+flutter --version
+```
+
+The script downloads the stable Linux archive (configurable via environment variables) and unpacks it to `.flutter-sdk/` inside
+the repository. Re-run it any time you need to update the SDK.
 - Android 12+ device (Pixel 6/7/8 recommended) with developer options enabled.
 
 ### Setup
