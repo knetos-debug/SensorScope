@@ -19,18 +19,22 @@ class SecurityHomePage extends ConsumerStatefulWidget {
 class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
   bool _dialogInFlight = false;
   bool _exportInProgress = false;
+  ProviderSubscription<AsyncValue<SecuritySettings>>? _settingsSubscription;
 
   @override
   void initState() {
     super.initState();
-    ref.listen<AsyncValue<SecuritySettings>>(securitySettingsProvider,
-        (previous, next) {
-      next.whenData((settings) {
-        if (!settings.consentRecorded && !_dialogInFlight) {
-          _promptForConsent();
-        }
-      });
-    });
+    _settingsSubscription = ref.listenManual<AsyncValue<SecuritySettings>>(
+      securitySettingsProvider,
+      (previous, next) {
+        next.whenData((settings) {
+          if (!settings.consentRecorded && !_dialogInFlight) {
+            _promptForConsent();
+          }
+        });
+      },
+      fireImmediately: true,
+    );
   }
 
   Future<void> _promptForConsent() async {
@@ -56,6 +60,13 @@ class _SecurityHomePageState extends ConsumerState<SecurityHomePage> {
       }
     }
     _dialogInFlight = false;
+  }
+
+  @override
+  void dispose() {
+    _settingsSubscription?.close();
+    _settingsSubscription = null;
+    super.dispose();
   }
 
   @override
